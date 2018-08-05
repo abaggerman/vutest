@@ -1,0 +1,93 @@
+<?php
+
+/**
+ * @file
+ * Module file for the vutest module.
+ */
+
+/**
+ * Implements hook_theme().
+ */
+function vutest_theme() {
+    $theme['vutest_latest_inventions'] = [
+        'variables'    => [
+            'articles' => NULL,
+        ],
+        'template' => 'vutest-latest-inventions',
+        'path' => drupal_get_path('module', 'vutest') . '/templates',
+    ];
+    return $theme;
+}
+
+/**
+ * Implements hook_block_info().
+ */
+function vutest_block_info() {
+    $blocks= [];
+    // Block to show 5 latest "Invention" Articles.
+    $blocks['vutest_latest_inventions'] = [
+        'info' => t('Block to show 5 latest invention articles.'),
+        'status' => TRUE,
+        'region' => 'content',
+        'visibility' => BLOCK_VISIBILITY_LISTED,
+        'pages' => '<front>',
+        'weight' => -1,
+    ];
+    return $blocks;
+}
+
+/**
+ * Implements hook_block_view().
+ */
+function vutest_block_view($delta = '') {
+    $block = [];
+    if ($delta == 'vutest_latest_inventions') {
+        if (user_access('access content')) {
+            $nodes = vutest_get_titled_nodes('article', 'Invention', 5);
+            $articles = [];
+            foreach($nodes as $node) {
+                $uri = entity_uri('node', $node);
+                $path = $uri['path'];
+                $title = l($node->title, $path);
+                $summary = field_view_field('node', $node, 'body', ['label'=>'hidden', 'type' => 'text_summary_or_trimmed', 'settings' => ['trim_length' => 150]]);
+                $date_changed = format_date($node->changed, 'medium');
+                $articles[] = [
+                    'title' => $title,
+                    'summary' => $summary,
+                    'date_changed' => $date_changed,
+                ];
+            }
+            $block['subject'] = '5 Latest Invention Articles';
+            $block['content'] = [
+                '#theme' => 'vutest_latest_inventions',
+                '#articles' => $articles,
+            ];
+        }
+        else {
+            $block['content'] = t('You are not authorised to view this content.');
+        }
+    }
+    return $block;
+}
+
+/**
+ * Helper function to get nodes with specific text in the title.
+ */
+function vutest_get_titled_nodes($bundle, $text, $limit) {
+    $query = new EntityFieldQuery();
+    $query->entityCondition('entity_type', 'node')
+        ->entityCondition('bundle', $bundle)
+        ->propertyCondition('status', NODE_PUBLISHED)
+        ->propertyCondition('title', $text, 'CONTAINS')
+        ->propertyOrderBy('changed','DESC')
+        ->range(0, $limit);
+    $result = $query->execute();
+    if (isset($result['node'])) {
+        $nids = array_keys($result['node']);
+        $nodes = entity_load('node', $nids);
+    }
+    else {
+        $nodes = [];
+    }
+    return $nodes;
+}
